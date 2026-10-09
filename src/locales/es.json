@@ -1,0 +1,137 @@
+{
+  "app": {
+    "title": "Escáner AR de Tarjetas",
+    "subtitle": "Convierte una tarjeta impresa en una persona 3D con mensajes emergentes"
+  },
+  "home": {
+    "upload": "Subir contenido",
+    "scan": "Escanear tarjeta",
+    "projectsTitle": "Proyectos guardados",
+    "projectsEmpty": "Aún no tienes proyectos. Sube tu primer vídeo para empezar.",
+    "tutorialTitle": "Cómo funciona",
+    "tutorial": [
+      "Graba tu vídeo con fondo verde o expórtalo en .webm con canal alfa.",
+      "Sube el vídeo en «Subir contenido» y configura los mensajes emergentes.",
+      "Compila la imagen de tu tarjeta en mindarjs.org y sube el archivo .mind resultante.",
+      "Imprime la tarjeta en tamaño conocido y anota su ancho en cm.",
+      "Abre «Escanear tarjeta» en tu móvil, apunta a la tarjeta y disfruta."
+    ],
+    "warningsTitle": "Consejos de impresión",
+    "warnings": [
+      "Imprime sin reflejos, sobre superficie plana y con buen contraste.",
+      "Usa buena iluminación.",
+      "Evita mover la tarjeta muy rápido."
+    ]
+  },
+  "upload": {
+    "title": "Subir contenido",
+    "videoTitle": "1. Vídeo de la persona",
+    "videoLabel": "Vídeo (.webm con alfa preferido, o .mp4)",
+    "videoPreview": "Vista previa",
+    "videoRequired": "Selecciona un vídeo para continuar.",
+    "videoUnsupported": "Tu navegador no puede reproducir este formato. Usa .webm o .mp4 (H.264).",
+    "videoTooBig": "El vídeo supera 200 MB: puede dar problemas de espacio en el dispositivo.",
+    "videoInfo": "{size} · {duration}",
+    "targetTitle": "2. Target de la tarjeta",
+    "targetMindLabel": "Archivo .mind compilado",
+    "targetMindHint": "Compila la imagen de tu tarjeta en mindarjs.org y sube el .mind resultante.",
+    "targetImageLabel": "Imagen de la tarjeta impresa",
+    "targetImageHint": "La misma imagen que compilaste (png/jpg/webp). Se usa como miniatura.",
+    "targetMindRequired": "Sube el archivo .mind del target.",
+    "targetImageRequired": "Sube la imagen de la tarjeta.",
+    "timelineTitle": "3. Mensajes emergentes (Timeline)",
+    "timelineHint": "Configura textos que aparecerán sobre la pantalla en segundos específicos del vídeo.",
+    "addMessage": "Añadir mensaje",
+    "timestampLabel": "Segundo de inicio (s)",
+    "durationLabel": "Duración visible (s)",
+    "positionLabel": "Posición en pantalla",
+    "positionTop": "Arriba",
+    "positionCenter": "Centro",
+    "positionBottom": "Abajo",
+    "contentLabel": "Texto del mensaje",
+    "contentPlaceholder": "Ej: ¡Bienvenido a nuestra experiencia de realidad aumentada!",
+    "contentRequired": "El texto del mensaje no puede estar vacío.",
+    "emptyMessages": "Aún no has agregado mensajes. El vídeo se reproducirá sin popups.",
+    "deleteMessage": "Eliminar",
+    "editMessage": "Editar",
+    "cancelEdit": "Cancelar",
+    "saveMessage": "Actualizar",
+    "formTitle": "4. Configuración general",
+    "nameLabel": "Nombre del proyecto",
+    "namePlaceholder": "Ej: Tarjeta de bienvenida",
+    "nameRequired": "Ponle un nombre al proyecto.",
+    "widthLabel": "Ancho real de la tarjeta impresa (cm)",
+    "widthHint": "Se usa para escalar la persona sobre la tarjeta.",
+    "widthRequired": "Indica un ancho entre 1 y 200 cm.",
+    "loopLabel": "Repetir el vídeo en bucle",
+    "mutedLabel": "Empezar sin sonido",
+    "save": "Guardar proyecto",
+    "saving": "Guardando…",
+    "chooseFiles": "Elegir archivo",
+    "changeFiles": "Cambiar archivo",
+    "remove": "Quitar"
+  },
+  "projects": {
+    "scan": "Escanear",
+    "detail": "Ver detalle",
+    "delete": "Eliminar",
+    "confirmDelete": "¿Eliminar este proyecto? No se puede deshacer.",
+    "deleted": "Proyecto eliminado.",
+    "loading": "Cargando proyectos…",
+    "updated": "Actualizado {date}",
+    "videoSize": "Vídeo: {size}"
+  },
+  "detail": {
+    "title": "Proyecto",
+    "notFound": "No encontramos este proyecto.",
+    "back": "Volver al inicio",
+    "messages": "Mensajes: {count}",
+    "target": "Target",
+    "width": "Ancho de tarjeta",
+    "loop": "Bucle",
+    "loopOn": "Sí",
+    "loopOff": "No",
+    "audio": "Audio",
+    "audioOn": "Activado",
+    "audioOff": "Silenciado",
+    "created": "Creado",
+    "emptyMessages": "Este proyecto no tiene mensajes programados en su timeline.",
+    "messagesList": "Mensajes en el timeline"
+  },
+  "scan": {
+    "state": {
+      "idle": "Elige un proyecto y activa la cámara",
+      "requesting-permission": "Solicitando acceso a la cámara",
+      "loading-assets": "Cargando contenido del proyecto",
+      "scanning": "Apunta a tu tarjeta",
+      "detected": "Tarjeta detectada",
+      "playing": "Reproduciendo",
+      "error": "Se ha producido un error"
+    },
+    "action": {
+      "activateCamera": "Activar cámara",
+      "restart": "Reiniciar",
+      "exit": "Salir",
+      "mute": "Silenciar",
+      "unmute": "Activar sonido",
+      "tryWithoutCamera": "Probar sin QR"
+    },
+    "project": {
+      "label": "Proyecto",
+      "placeholder": "Elige un proyecto…",
+      "empty": "No hay proyectos. Crea uno en «Subir contenido».",
+      "loading": "Cargando proyecto…",
+      "missing": "No se pudo cargar el proyecto."
+    },
+    "videoEnded": "El vídeo ha terminado.",
+    "errors": {
+      "permission-denied": "Necesitamos acceso a la cámara para funcionar. Actívalo en ajustes del navegador.",
+      "no-camera": "No detectamos cámara en tu dispositivo.",
+      "https-required": "Esta app necesita HTTPS. Abre desde una URL segura.",
+      "asset-missing": "El proyecto no tiene vídeo asignado.",
+      "target-missing": "El proyecto no tiene archivo .mind del target.",
+      "unsupported-codec": "Tu navegador no soporta el formato del vídeo. Prueba con .webm o .mp4 (H.264).",
+      "target-load-error": "No se pudo cargar el target de la tarjeta."
+    }
+  }
+}

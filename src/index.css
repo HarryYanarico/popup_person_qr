@@ -1,0 +1,22 @@
+@import 'tailwindcss';
+
+/* Modo oscuro por defecto (requisito no funcional) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  background-color: #09090b; /* zinc-950 */
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Focus visible global (accesibilidad) */
+:focus-visible {
+  outline: 2px solid #818cf8; /* indigo-400 */
+  outline-offset: 2px;
+}
