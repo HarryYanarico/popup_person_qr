@@ -45,7 +45,7 @@ export function TimelineEditor() {
       return;
     }
     if (timestamp < 0) {
-      setError('El timestamp debe ser mayor o igual a 0.');
+      setError('El tiempo debe ser mayor o igual a 0 segundos.');
       return;
     }
     if (duration <= 0) {
@@ -70,11 +70,21 @@ export function TimelineEditor() {
         content: content.trim(),
         type: 'text',
       });
-      // Avanzar timestamp sugerido en 3 segundos para facilitar la creación secuencial
       setTimestamp((prev) => Number((Number(prev) + Number(duration) + 1).toFixed(1)));
       setContent('');
       setError(null);
     }
+  };
+
+  const handleQuickTemplate = (preset: { time: number; dur: number; pos: 'top' | 'center' | 'bottom'; text: string }) => {
+    addMessage({
+      timestamp: preset.time,
+      duration: preset.dur,
+      position: preset.pos,
+      content: preset.text,
+      type: 'text',
+    });
+    setTimestamp(Number((preset.time + preset.dur + 1).toFixed(1)));
   };
 
   const positionBadgeLabel = (pos: 'top' | 'center' | 'bottom') => {
@@ -89,13 +99,65 @@ export function TimelineEditor() {
   };
 
   return (
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl backdrop-blur-sm">
       <header>
         <h2 className="text-lg font-semibold text-zinc-100">{es.upload.timelineTitle}</h2>
         <p className="mt-1 text-xs text-zinc-400">{es.upload.timelineHint}</p>
+        <div className="mt-2 rounded-lg bg-indigo-950/30 border border-indigo-500/20 px-3 py-2 text-xs text-indigo-300">
+          {es.upload.messagesOptional}
+        </div>
       </header>
 
-      {/* Formulario para añadir o editar mensaje */}
+      {/* Plantillas rápidas */}
+      <div className="mt-4">
+        <span className="text-xs font-medium text-zinc-400">Plantillas sugeridas en 1 clic:</span>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              handleQuickTemplate({
+                time: 0.5,
+                dur: 3,
+                pos: 'top',
+                text: '👋 ¡Hola! Bienvenido a mi tarjeta de presentación.',
+              })
+            }
+            className="rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1.5 text-xs text-zinc-200 transition hover:border-indigo-500 hover:text-white"
+          >
+            {es.upload.templateWelcome}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              handleQuickTemplate({
+                time: 2.5,
+                dur: 3,
+                pos: 'bottom',
+                text: '💼 Descubre nuestros servicios y proyectos destacados.',
+              })
+            }
+            className="rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1.5 text-xs text-zinc-200 transition hover:border-indigo-500 hover:text-white"
+          >
+            {es.upload.templateInfo}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              handleQuickTemplate({
+                time: 4.5,
+                dur: 3,
+                pos: 'bottom',
+                text: '📞 Contáctame: info@ejemplo.com | +1 234 567 890',
+              })
+            }
+            className="rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1.5 text-xs text-zinc-200 transition hover:border-indigo-500 hover:text-white"
+          >
+            {es.upload.templateContact}
+          </button>
+        </div>
+      </div>
+
+      {/* Formulario */}
       <form onSubmit={handleSubmit} className="mt-5 rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-4">
         <h3 className="text-sm font-medium text-indigo-400">
           {editingId ? es.upload.editMessage : es.upload.addMessage}
@@ -181,10 +243,10 @@ export function TimelineEditor() {
         </div>
       </form>
 
-      {/* Lista de mensajes en el timeline */}
+      {/* Lista de mensajes configurados */}
       <div className="mt-5">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-          Mensajes configurados ({messages.length})
+          Mensajes programados ({messages.length})
         </h4>
 
         {messages.length === 0 ? (

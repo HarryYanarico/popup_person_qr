@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { DoubleSide, SRGBColorSpace, VideoTexture } from 'three';
+import { Color, DoubleSide, Mesh, ShaderMaterial, SRGBColorSpace, VideoTexture } from 'three';
 import type { RefObject } from 'react';
 import { useScanStore } from '../../store/useScanStore';
 import type { Project } from '../../types/project';
@@ -137,12 +137,92 @@ export function PersonBillboard({ frameRef, project }: PersonBillboardProps) {
     setVideoElement,
   );
 
+  // Shader para eliminar el fondo verde/oscuro y dejar visible la cámara real
+  const chromaMaterial = useMemo(() => {
+    if (!texture || project.hasAlpha) return null;
+
+    const hex = project.chromaColor || '#00ff00';
+    const keyCol = new Color(hex);
+    const isGreen = keyCol.g > keyCol.r && keyCol.g > keyCol.b;
+
+    return new ShaderMaterial({
+      uniforms: {
+        map: { value: texture },
+        keyColor: { value: keyCol },
+        similarity: { value: isGreen ? 0.38 : 0.26 },
+        smoothness: { value: 0.08 },
+        isGreenKey: { value: isGreen },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D map;
+        uniform vec3 keyColor;
+        uniform float similarity;
+        uniform float smoothness;
+        uniform bool isGreenKey;
+        varying vec2 vUv;
+
+        void main() {
+          vec4 tex = texture2D(map, vUv);
+          
+          // 1. Distancia al color clave seleccionado (ej. verde #00ff00 o chromaColor)
+          float dist = distance(tex.rgb, keyColor);
+          float alpha = smoothstep(similarity - smoothness, similarity + smoothness, dist);
+          
+          // 2. Soporte para fondo azul/gris oscuro del demo previo (#0f172a = rgb(0.0588, 0.0902, 0.1647))
+          vec3 slateKey = vec3(0.0588, 0.0902, 0.1647);
+          float distSlate = distance(tex.rgb, slateKey);
+          float alphaSlate = smoothstep(0.18, 0.28, distSlate);
+          
+          alpha = min(alpha, alphaSlate);
+          
+          // Descartar completamente si es transparente para no tapar la cámara
+          if (alpha < 0.03) {
+            discard;
+          }
+          
+          vec3 color = tex.rgb;
+          // Supresión de reflejos verdes en los bordes
+          if (isGreenKey) {
+            color.g = min(color.g, max(color.r, color.b) * 1.05);
+          }
+          
+          gl_FragColor = vec4(color, tex.a * alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      side: DoubleSide,
+      toneMapped: false,
+    });
+  }, [project.hasAlpha, project.chromaColor, texture]);
+
+
+  // Limpiar material al desmontar
+  useEffect(() => {
+    return () => {
+      chromaMaterial?.dispose();
+    };
+  }, [chromaMaterial]);
+
+  const meshRef = useRef<Mesh>(null);
+
   if (!texture) return null;
 
   return (
-    <mesh position={[0, 0, 0.001]}>
+    <mesh ref={meshRef} position={[0, 0, 0.001]}>
       <planeGeometry args={[1, aspect]} />
-      <meshBasicMaterial map={texture} transparent side={DoubleSide} toneMapped={false} />
+      {chromaMaterial ? (
+        <primitive object={chromaMaterial} attach="material" />
+      ) : (
+        <meshBasicMaterial map={texture} transparent side={DoubleSide} toneMapped={false} />
+      )}
     </mesh>
   );
 }

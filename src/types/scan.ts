@@ -1,5 +1,7 @@
 // Estados del escáner AR (Prompt MAESTRO v2 — RF-07)
 
+export type ScanMode = 'surface' | 'qr';
+
 export type ScanState =
   | 'idle'
   | 'requesting-permission'

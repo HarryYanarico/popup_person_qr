@@ -1,10 +1,18 @@
 import { create } from 'zustand';
-import type { ScanError, ScanState } from '../types/scan';
+import type { ScanError, ScanMode, ScanState } from '../types/scan';
 
 interface ScanStore {
   state: ScanState;
   error: ScanError | null;
   isTracking: boolean;
+  // Modo de escaneo: 'surface' (demo sin tarjeta en superficie plana) o 'qr' (tarjeta impresa con QR)
+  scanMode: ScanMode;
+  // Estado de fijación en superficie para el modo demo
+  isSurfaceFixed: boolean;
+  surfaceScale: number;
+  surfacePosition: [number, number, number];
+  candidateSurfacePosition: [number, number, number];
+  detectedQrPayload: string | null;
   // Sesión de cámara: 0 = inactiva; cada start() incrementa para que CameraView
   // pueda montar/desmontar con un solo effect estable (evita re-ejecuciones por cambio de fase)
   session: number;
@@ -20,8 +28,19 @@ interface ScanStore {
   start: () => void;
   stop: () => void;
   fail: (error: ScanError) => void;
+  // Estado de bloqueo permanente tras el primer escaneo de la tarjeta QR
+  isQrLocked: boolean;
+  lockQr: () => void;
+  rescanQr: () => void;
   setPhase: (state: ScanState) => void;
   setTracking: (isTracking: boolean) => void;
+  setScanMode: (mode: ScanMode) => void;
+  fixSurface: (position?: [number, number, number]) => void;
+  unfixSurface: () => void;
+  setCandidateSurfacePosition: (pos: [number, number, number]) => void;
+  setSurfacePosition: (pos: [number, number, number]) => void;
+  setSurfaceScale: (scale: number) => void;
+  setDetectedQrPayload: (payload: string | null) => void;
   setSelectedProject: (id: string | null) => void;
   setVideoElement: (videoElement: HTMLVideoElement | null) => void;
   setVideoEnded: (videoEnded: boolean) => void;
@@ -34,6 +53,13 @@ export const useScanStore = create<ScanStore>((set, get) => ({
   state: 'idle',
   error: null,
   isTracking: false,
+  scanMode: 'qr',
+  isSurfaceFixed: false,
+  isQrLocked: false,
+  surfaceScale: 1.0,
+  surfacePosition: [0, -0.75, -1.8],
+  candidateSurfacePosition: [0, -0.75, -1.8],
+  detectedQrPayload: null,
   session: 0,
   selectedProjectId: null,
   videoElement: null,
@@ -50,22 +76,66 @@ export const useScanStore = create<ScanStore>((set, get) => ({
       isTracking: false,
       session: get().session + 1,
       videoEnded: false,
+      isSurfaceFixed: false,
+      isQrLocked: false,
     });
   },
 
   // cualquier estado → idle (detiene cámara y tracking)
   stop: () => {
-    set({ state: 'idle', error: null, isTracking: false, session: 0, videoElement: null });
+    set({
+      state: 'idle',
+      error: null,
+      isTracking: false,
+      session: 0,
+      videoElement: null,
+      isSurfaceFixed: false,
+      isQrLocked: false,
+    });
   },
 
   // cualquier estado → error (detiene la sesión para que CameraView limpie recursos)
   fail: (error) => {
-    set({ state: 'error', error, isTracking: false, session: 0, videoElement: null });
+    set({
+      state: 'error',
+      error,
+      isTracking: false,
+      session: 0,
+      videoElement: null,
+      isSurfaceFixed: false,
+      isQrLocked: false,
+    });
   },
 
   setPhase: (state) => set({ state }),
 
   setTracking: (isTracking) => set({ isTracking }),
+
+  setScanMode: (scanMode) => set({ scanMode, isSurfaceFixed: false, isQrLocked: false }),
+
+  lockQr: () => set({ isQrLocked: true, isTracking: true, state: 'playing' }),
+
+  rescanQr: () => set({ isQrLocked: false, isTracking: false, state: 'scanning' }),
+
+  fixSurface: (position) => {
+    const targetPos = position ?? get().candidateSurfacePosition;
+    set({
+      surfacePosition: targetPos,
+      isSurfaceFixed: true,
+      isTracking: true,
+      state: 'playing',
+    });
+  },
+
+  unfixSurface: () => set({ isSurfaceFixed: false, isTracking: false, state: 'scanning' }),
+
+  setCandidateSurfacePosition: (candidateSurfacePosition) => set({ candidateSurfacePosition }),
+
+  setSurfacePosition: (surfacePosition) => set({ surfacePosition }),
+
+  setSurfaceScale: (surfaceScale) => set({ surfaceScale }),
+
+  setDetectedQrPayload: (detectedQrPayload) => set({ detectedQrPayload }),
 
   setSelectedProject: (id) => set({ selectedProjectId: id }),
 

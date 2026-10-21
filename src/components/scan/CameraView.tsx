@@ -1,55 +1,47 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
-import { Controller } from 'mind-ar/dist/mindar-image.prod.js';
+import { Matrix4, Quaternion, Vector3 } from 'three';
+import jsQR from 'jsqr';
 import { openRearCamera, stopStream } from '../../hooks/useCamera';
-import { useARAnchor } from '../../hooks/useARAnchor';
 import { useScanStore } from '../../store/useScanStore';
+import { QRPoseTracker } from '../../utils/qrPose';
+import type { DeviceOrientationState } from '../../hooks/useDeviceOrientation';
 import type { Project } from '../../types/project';
 import type { ARFrameState } from '../../types/scan';
 
 interface CameraViewProps {
   frameRef: RefObject<ARFrameState | null>;
-  /** Proyecto seleccionado: su .mind (blob) y su vídeo se cargan al iniciar la sesión */
   project: Project | null;
+  orientation?: DeviceOrientationState;
 }
 
 /**
- * Dueño del stream de cámara y del Controller de MindAR (RF-01).
- * Nunca abre dos getUserMedia en paralelo: un solo stream durante toda la sesión.
- * Pinta el vídeo de fondo; la escena 3D va en ARScene (capa superpuesta).
+ * Dueño del stream de cámara y del seguimiento en tiempo real (RF-01).
+ * Soporta dos modos:
+ * 1. Modo 'surface' (Demo): proyección en superficie plana con orientación del giroscopio.
+ * 2. Modo 'qr': escaneo del código QR impreso en tarjeta; solo al escanear aparece la animación fija en el mundo.
  */
-export function CameraView({ frameRef, project }: CameraViewProps) {
+export function CameraView({ frameRef, project, orientation }: CameraViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const controllerRef = useRef<Controller | null>(null);
-  const mindUrlRef = useRef<string | null>(null);
+  const poseTrackerRef = useRef(new QRPoseTracker());
+  const orientationRef = useRef(orientation);
+
+  useEffect(() => {
+    orientationRef.current = orientation;
+  }, [orientation]);
 
   const session = useScanStore((s) => s.session);
+  const scanMode = useScanStore((s) => s.scanMode);
+  const isSurfaceFixed = useScanStore((s) => s.isSurfaceFixed);
   const setPhase = useScanStore((s) => s.setPhase);
   const setTracking = useScanStore((s) => s.setTracking);
+  const setDetectedQrPayload = useScanStore((s) => s.setDetectedQrPayload);
   const fail = useScanStore((s) => s.fail);
-  const { setup, onUpdate } = useARAnchor(frameRef);
 
-  /** Libera cámara, vídeo y worker de MindAR. Idempotente. */
+  /** Libera cámara y vídeo. */
   const teardown = useCallback(() => {
-    const controller = controllerRef.current;
-    if (controller) {
-      try {
-        controller.stopProcessVideo();
-        controller.worker.terminate();
-        controller.dispose();
-      } catch {
-        // El controller puede haber fallado a medias: continuar con la limpieza
-      }
-      controllerRef.current = null;
-    }
-
-    if (mindUrlRef.current) {
-      URL.revokeObjectURL(mindUrlRef.current);
-      mindUrlRef.current = null;
-    }
-
     stopStream(streamRef.current);
     streamRef.current = null;
 
@@ -62,29 +54,25 @@ export function CameraView({ frameRef, project }: CameraViewProps) {
     if (frameRef.current) {
       frameRef.current.anchorVisible = false;
     }
+    poseTrackerRef.current.reset();
     setTracking(false);
   }, [frameRef, setTracking]);
 
-  /**
-   * Recalcula el "cover" del vídeo y la proyección de la cámara (puerto fiel de la
-   * lógica de resize de MindAR: src/image-target/three.js). Si el cálculo cambia,
-   * marca cameraDirty para que ARScene aplique los parámetros al camera de R3F.
-   */
+  /** Recalcula el cover del vídeo y los parámetros de proyección de la cámara. */
   const updateLayout = useCallback(() => {
     const video = videoRef.current;
     const container = containerRef.current;
-    const controller = controllerRef.current;
-    if (!video || !container || !controller) return;
+    if (!video || !container) return;
 
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;
     if (!video.videoWidth || !video.videoHeight || !containerWidth || !containerHeight) return;
 
-    // Tamaño de representación del vídeo que cubre todo el contenedor (cover)
     const videoRatio = video.videoWidth / video.videoHeight;
     const containerRatio = containerWidth / containerHeight;
     let displayWidth: number;
     let displayHeight: number;
+
     if (videoRatio > containerRatio) {
       displayHeight = containerHeight;
       displayWidth = displayHeight * videoRatio;
@@ -93,32 +81,6 @@ export function CameraView({ frameRef, project }: CameraViewProps) {
       displayHeight = displayWidth / videoRatio;
     }
 
-    const proj = controller.getProjectionMatrix();
-    const proj5 = proj[5];
-    const proj10 = proj[10];
-    const proj14 = proj[14];
-    if (proj5 === undefined || proj10 === undefined || proj14 === undefined) return;
-
-    const inputRatio = controller.inputWidth / controller.inputHeight;
-    const inputAdjust =
-      inputRatio > containerRatio
-        ? video.width / controller.inputWidth
-        : video.height / controller.inputHeight;
-
-    let videoDisplayHeight: number;
-    if (inputRatio > containerRatio) {
-      videoDisplayHeight = containerHeight * inputAdjust;
-    } else {
-      videoDisplayHeight = (containerWidth / controller.inputWidth) * controller.inputHeight * inputAdjust;
-    }
-
-    // FOV vertical del trozo de vídeo realmente visible (corrige el recorte "cover")
-    const fovAdjust = containerHeight / videoDisplayHeight;
-    const fov = (2 * Math.atan((1 / proj5) * fovAdjust) * 180) / Math.PI;
-    const near = proj14 / (proj10 - 1.0);
-    const far = proj14 / (proj10 + 1.0);
-
-    // Centrar el vídeo recortado dentro del contenedor
     video.style.width = `${displayWidth}px`;
     video.style.height = `${displayHeight}px`;
     video.style.left = `${(-(displayWidth - containerWidth) / 2).toFixed(1)}px`;
@@ -126,13 +88,29 @@ export function CameraView({ frameRef, project }: CameraViewProps) {
 
     const frame = frameRef.current;
     if (!frame) return;
-    frame.cameraParams = { fov, near, far, aspect: containerWidth / containerHeight };
+
+    // FOV vertical estándar móvil
+    const fov = 48;
+    frame.cameraParams = {
+      fov,
+      near: 0.05,
+      far: 1000,
+      aspect: containerWidth / containerHeight,
+    };
     frame.cameraDirty = true;
   }, [frameRef]);
 
-  // Ciclo de vida de la sesión: session > 0 → arrancar; session = 0 → parar y limpiar.
-  // El efecto depende solo de `session`, así las fases internas (loading-assets,
-  // scanning, detected, playing) no interrumpen el arranque.
+  // Actualizar visibilidad en modo superficie al fijar
+  useEffect(() => {
+    if (scanMode === 'surface') {
+      if (frameRef.current) {
+        frameRef.current.anchorVisible = isSurfaceFixed;
+      }
+      setTracking(isSurfaceFixed);
+    }
+  }, [scanMode, isSurfaceFixed, frameRef, setTracking]);
+
+  // Ciclo principal de cámara y detección
   useEffect(() => {
     if (session === 0) {
       teardown();
@@ -140,6 +118,7 @@ export function CameraView({ frameRef, project }: CameraViewProps) {
     }
 
     let cancelled = false;
+    let animFrameId: number | null = null;
 
     const run = async () => {
       const video = videoRef.current;
@@ -148,22 +127,20 @@ export function CameraView({ frameRef, project }: CameraViewProps) {
         return;
       }
 
-      // Validaciones del proyecto ANTES de pedir la cámara (RF-06)
       if (!project) {
         fail('asset-missing');
         return;
       }
-      if (!project.targetMindBlob) {
-        fail('target-missing');
-        return;
-      }
+
+      // Validar soporte de códec de vídeo
       const probe = document.createElement('video');
       if (project.videoMimeType && probe.canPlayType(project.videoMimeType) === '') {
         fail('unsupported-codec');
         return;
       }
 
-      // 1) Permiso de cámara (una única llamada a getUserMedia)
+      // 1) Solicitar cámara
+      setPhase('requesting-permission');
       const camera = await openRearCamera();
       if (cancelled) {
         if (camera.ok) stopStream(camera.stream);
@@ -175,7 +152,7 @@ export function CameraView({ frameRef, project }: CameraViewProps) {
       }
       streamRef.current = camera.stream;
 
-      // 2) Reproducir el flujo en el <video>
+      // 2) Conectar stream al <video>
       video.srcObject = camera.stream;
       try {
         await new Promise<void>((resolve, reject) => {
@@ -194,7 +171,6 @@ export function CameraView({ frameRef, project }: CameraViewProps) {
           video.addEventListener('loadedmetadata', onLoaded);
           video.addEventListener('error', onError);
         });
-        // muted + playsInline: autoplay permitido también en iOS
         await video.play();
       } catch {
         if (!cancelled) fail('unsupported-codec');
@@ -202,44 +178,100 @@ export function CameraView({ frameRef, project }: CameraViewProps) {
       }
       if (cancelled) return;
 
-      // 3) Cargar el target .mind
-      setPhase('loading-assets');
-      const controller = new Controller({
-        inputWidth: video.videoWidth,
-        inputHeight: video.videoHeight,
-        onUpdate,
-      });
-      controllerRef.current = controller;
-
-      let dimensions: number[][];
-      try {
-        // El .mind vive como Blob en IndexedDB: MindAR lo carga desde una object URL
-        const mindUrl = URL.createObjectURL(project.targetMindBlob);
-        mindUrlRef.current = mindUrl;
-        const result = await controller.addImageTargets(mindUrl);
-        dimensions = result.dimensions;
-      } catch {
-        if (!cancelled) fail('target-load-error');
-        return;
-      }
-      if (cancelled) return;
-
-      setup(dimensions);
-
-      // Dimensiones usadas por el resize (igual que MindAR)
-      video.setAttribute('width', String(video.videoWidth));
-      video.setAttribute('height', String(video.videoHeight));
-
-      try {
-        controller.dummyRun(video); // calienta los kernels antes del primer frame real
-      } catch {
-        // No fatal: seguimos aunque el warm-up falle
-      }
-      if (cancelled) return;
-
       updateLayout();
-      controller.processVideo(video);
       setPhase('scanning');
+
+      // 3) Si estamos en modo QR, iniciar el lector de código QR en tiempo real
+      if (scanMode === 'qr') {
+        const offCanvas = document.createElement('canvas');
+        const offCtx = offCanvas.getContext('2d', { willReadFrequently: true });
+        if (!offCtx) return;
+
+        let lastScanTime = 0;
+        const qrScanIntervalMs = 40; // ~25 fps de detección para máxima fluidez y bajo consumo
+
+        const scanLoop = () => {
+          if (cancelled) return;
+
+          const now = performance.now();
+          if (now - lastScanTime >= qrScanIntervalMs && video.readyState >= 2) {
+            lastScanTime = now;
+
+            // Escala reducida para escaneo instantáneo (ancho máx 480px)
+            const targetWidth = Math.min(480, video.videoWidth || 480);
+            const scale = targetWidth / video.videoWidth;
+            const targetHeight = Math.round(video.videoHeight * scale);
+
+            if (offCanvas.width !== targetWidth || offCanvas.height !== targetHeight) {
+              offCanvas.width = targetWidth;
+              offCanvas.height = targetHeight;
+            }
+
+            offCtx.drawImage(video, 0, 0, targetWidth, targetHeight);
+            const imageData = offCtx.getImageData(0, 0, targetWidth, targetHeight);
+            const code = jsQR(imageData.data, targetWidth, targetHeight, {
+              inversionAttempts: 'dontInvert',
+            });
+
+            if (code && code.location) {
+              setDetectedQrPayload(code.data);
+
+              const container = containerRef.current;
+              const cWidth = container?.clientWidth || 360;
+              const cHeight = container?.clientHeight || 640;
+
+              // Calcular pose 3D de la tarjeta QR
+              const matrix = poseTrackerRef.current.computeMatrix(code, {
+                canvasWidth: targetWidth,
+                canvasHeight: targetHeight,
+                containerWidth: cWidth,
+                containerHeight: cHeight,
+                fov: frameRef.current?.cameraParams?.fov || 48,
+              });
+
+              if (frameRef.current) {
+                const curOrient = orientationRef.current;
+                if (curOrient?.isActive && curOrient.quaternionRef.current) {
+                  // Transformar a coordenadas fijas de mundo Three.js según la orientación real del teléfono
+                  const camPos = new Vector3();
+                  const camQuat = new Quaternion();
+                  const camScale = new Vector3();
+                  matrix.decompose(camPos, camQuat, camScale);
+
+                  const phoneQuat = curOrient.quaternionRef.current;
+                  const worldPos = camPos.clone().applyQuaternion(phoneQuat);
+                  const worldQuat = phoneQuat.clone().multiply(camQuat);
+
+                  const worldMatrix = new Matrix4();
+                  worldMatrix.compose(worldPos, worldQuat, camScale);
+                  frameRef.current.anchorMatrix.copy(worldMatrix);
+                } else {
+                  frameRef.current.anchorMatrix.copy(matrix);
+                }
+                frameRef.current.anchorVisible = true;
+              }
+              setTracking(true);
+              setPhase('playing');
+              // Bloquear anclaje permanente tras el primer escaneo del QR
+              useScanStore.getState().lockQr();
+            } else {
+              // Si la tarjeta QR ya fue escaneada, la animación PERMANECE FIJA en el mundo
+              // No desaparece aunque la cámara mire a otro lado ni requiere escanear de nuevo
+              const isLocked = useScanStore.getState().isQrLocked;
+              if (!isLocked) {
+                if (frameRef.current) {
+                  frameRef.current.anchorVisible = false;
+                }
+                setTracking(false);
+              }
+            }
+          }
+
+          animFrameId = requestAnimationFrame(scanLoop);
+        };
+
+        animFrameId = requestAnimationFrame(scanLoop);
+      }
     };
 
     run().catch(() => {
@@ -248,13 +280,23 @@ export function CameraView({ frameRef, project }: CameraViewProps) {
 
     return () => {
       cancelled = true;
+      if (animFrameId !== null) cancelAnimationFrame(animFrameId);
       teardown();
     };
-    // Dependencias: `session` reinicia el ciclo; `project` lo reinicia si cambia el
-    // proyecto (el selector está oculto mientras hay sesión activa)
-  }, [session, project, teardown, fail, setPhase, onUpdate, setup, updateLayout]);
+  }, [
+    session,
+    project,
+    scanMode,
+    teardown,
+    fail,
+    setPhase,
+    setTracking,
+    setDetectedQrPayload,
+    updateLayout,
+    frameRef,
+  ]);
 
-  // Reactivar el layout al redimensionar o rotar el dispositivo
+  // Listener para Resize y Orientación
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;

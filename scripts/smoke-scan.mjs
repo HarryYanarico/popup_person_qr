@@ -13,9 +13,10 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const PORT = 5199;
-const BASE = `http://localhost:${PORT}`;
+const BASE = `https://localhost:${PORT}`;
 const SHOT_DIR = process.env.SMOKE_SHOT_DIR ?? process.cwd();
 const PROJECT_ID = 'smoke-project';
 
@@ -159,6 +160,7 @@ async function main() {
       viewport: { width: 390, height: 844 },
       deviceScaleFactor: 2,
       permissions: ['camera'],
+      ignoreHTTPSErrors: true,
     });
     const page = await context.newPage();
 

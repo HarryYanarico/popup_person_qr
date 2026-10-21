@@ -1,9 +1,10 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { es as esLocale } from 'date-fns/locale';
 import es from '../../locales/es.json';
 import { Button } from '../ui/Button';
+import { QRCardModal } from '../project/QRCardModal';
 import type { Project } from '../../types/project';
 
 function formatBytes(bytes: number): string {
@@ -18,6 +19,8 @@ interface ProjectCardProps {
 
 // Tarjeta de proyecto en Home: preview de la imagen de la tarjeta + acciones.
 export function ProjectCard({ project, onDelete }: ProjectCardProps) {
+  const [modalOpen, setModalOpen] = useState(false);
+
   // Miniatura: objectURL derivada del blob, revocada al cambiar o desmontar
   const previewUrl = useMemo(
     () => URL.createObjectURL(project.targetImageBlob),
@@ -50,6 +53,17 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
         <Link to={`/scan?project=${project.id}`} className="contents">
           <Button size="sm">{es.projects.scan}</Button>
         </Link>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setModalOpen(true);
+          }}
+          className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20"
+        >
+          🖨️ QR
+        </button>
         <Link to={`/project/${project.id}`} className="contents">
           <Button size="sm" variant="secondary">
             {es.projects.detail}
@@ -65,6 +79,8 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
           {es.projects.delete}
         </Button>
       </div>
+
+      <QRCardModal project={project} isOpen={modalOpen} onClose={() => setModalOpen(false)} />
     </li>
   );
 }

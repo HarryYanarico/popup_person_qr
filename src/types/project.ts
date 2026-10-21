@@ -26,7 +26,7 @@ export interface Project {
   chromaColor?: string; // ej. '#00FF00' si se aplicó chroma key (pre-procesado al subir)
   // Target de tracking (imagen completa de la tarjeta + .mind compilado externamente)
   targetImageBlob: Blob; // preview de la tarjeta impresa (png/jpg/webp)
-  targetMindBlob: Blob; // archivo .mind compilado en mindarjs.org
+  targetMindBlob?: Blob | null; // archivo .mind compilado (opcional si es QR)
   targetName: string; // nombre original del .mind para depurar
   targetPhysicalWidthCm: number; // ancho real de la tarjeta impresa en cm
   messages: TimelineMessage[];

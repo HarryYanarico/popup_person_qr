@@ -84,7 +84,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   commitDraft: async () => {
     const d = get().draft;
-    if (!d.videoBlob || !d.targetMindBlob || !d.targetImageBlob) {
+    if (!d.videoBlob || !d.targetImageBlob) {
       throw new Error('draft-incomplete');
     }
     if (!d.targetPhysicalWidthCm) {
